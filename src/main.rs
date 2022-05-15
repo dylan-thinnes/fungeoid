@@ -1,8 +1,13 @@
 use std::fs;
 use std::ops::{Add, Rem};
 use rand::{Rng,rngs::OsRng};
+use std::io::BufRead;
 
 fn main() {
+    // Open stdin
+    let input = std::io::stdin();
+    let mut input = input.lock();
+
     // Parse in program
     let args: Vec<String> = std::env::args().collect();
     let src = fs::read_to_string(&args[1]).unwrap();
@@ -11,7 +16,7 @@ fn main() {
     // Run program
     let mut state = State::initial();
     while !state.halted {
-        state.step(&src);
+        state.step(&mut input, &src);
     }
 }
 
@@ -123,12 +128,12 @@ impl State {
         }
     }
 
-    fn step (&mut self, source: &Source) {
+    fn step<B: BufRead> (&mut self, input: &mut B, source: &Source) {
         if self.halted { return; }
         match source.lookup(&self.position) {
             None => { self.halted = true; },
             Some(instr) => {
-                self.update(&instr);
+                self.update(input, &instr);
                 self.move_pointer();
             }
         }
@@ -142,7 +147,7 @@ impl State {
         }
     }
 
-    fn update (&mut self, c: &char) {
+    fn update<B: BufRead> (&mut self, input: &mut B, c: &char) {
         match c {
             '"' => self.string_mode = !self.string_mode,
             _ if self.string_mode => {
@@ -210,6 +215,14 @@ impl State {
             },
             '#' => self.double_jump = true,
             '@' => self.halted = true,
+            '&' => {
+                let mut line = String::new();
+                if let Ok(_) = input.read_line(&mut line) {
+                    line.pop();
+                }
+                let inp = line.parse().unwrap_or(0);
+                self.stack.push(inp);
+            },
             _ => {
                 match c.to_digit(10) {
                     Some(v) => { self.stack.push(v as isize); },
